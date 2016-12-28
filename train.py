@@ -29,6 +29,9 @@ tf.flags.DEFINE_integer("batch_size", 64, "Batch Size (default: 64)")
 tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 200)")
 tf.flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps (default: 100)")
 tf.flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps (default: 100)")
+tf.flags.DEFINE_float("learning_rate", 0.001, "The start learning rate (default: 0.00001)")
+tf.flags.DEFINE_float("decay_rate", 0.98, "Decay rate for rmsprop (default: 0.97)")
+tf.flags.DEFINE_boolean("use_highway", True, "Use the highway network")
 # Misc Parameters
 tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
 tf.flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
@@ -84,11 +87,16 @@ with tf.Graph().as_default():
             embedding_size=FLAGS.embedding_dim,
             filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
             num_filters=FLAGS.num_filters,
+            use_highway=FLAGS.use_highway,
             l2_reg_lambda=FLAGS.l2_reg_lambda)
 
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
-        optimizer = tf.train.AdamOptimizer(1e-3)
+        decay_step = data_helpers.batches_num_pre_epoch(y_train, FLAGS.batch_size)
+        learning_rate = tf.train.exponential_decay(
+            FLAGS.learning_rate, global_step, decay_step, FLAGS.decay_rate)
+        optimizer = tf.train.AdamOptimizer(learning_rate)
+
         grads_and_vars = optimizer.compute_gradients(cnn.loss)
         train_op = optimizer.apply_gradients(grads_and_vars, global_step=global_step)
 
@@ -126,15 +134,21 @@ with tf.Graph().as_default():
         checkpoint_prefix = os.path.join(checkpoint_dir, "model")
         if not os.path.exists(checkpoint_dir):
             os.makedirs(checkpoint_dir)
-        saver = tf.train.Saver(tf.global_variables())
+        try:
+            saver = tf.train.Saver(tf.global_variables())
+        except:
+            saver = tf.train.Saver(tf.all_variables())
 
         # Write vocabulary
         vocab_processor.save(os.path.join(out_dir, "vocab"))
 
         # Initialize all variables
-        sess.run(tf.global_variables_initializer())
+        try:
+            sess.run(tf.global_variables_initializer())
+        except:
+            sess.run(tf.initialize_all_variables())
 
-        def train_step(x_batch, y_batch):
+        def train_step(x_batch, y_batch, epoch):
             """
             A single training step
             """
@@ -143,11 +157,11 @@ with tf.Graph().as_default():
               cnn.input_y: y_batch,
               cnn.dropout_keep_prob: FLAGS.dropout_keep_prob
             }
-            _, step, summaries, loss, accuracy = sess.run(
-                [train_op, global_step, train_summary_op, cnn.loss, cnn.accuracy],
+            _, step, lr, summaries, loss, accuracy = sess.run(
+                [train_op, global_step, learning_rate, train_summary_op, cnn.loss, cnn.accuracy],
                 feed_dict)
             time_str = datetime.datetime.now().isoformat()
-            print("{}: step {}, loss {:g}, acc {:g}".format(time_str, step, loss, accuracy))
+            print("{}: epoch {}/{}, step {}, lr {:.6f} , loss {:g}, acc {:g}".format(time_str, epoch, FLAGS.num_epochs, step, lr, loss, accuracy))
             train_summary_writer.add_summary(summaries, step)
 
         def dev_step(x_batch, y_batch, writer=None):
@@ -171,9 +185,9 @@ with tf.Graph().as_default():
         batches = data_helpers.batch_iter(
             list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
         # Training loop. For each batch...
-        for batch in batches:
+        for batch, epoch in batches:
             x_batch, y_batch = zip(*batch)
-            train_step(x_batch, y_batch)
+            train_step(x_batch, y_batch, epoch)
             current_step = tf.train.global_step(sess, global_step)
             if current_step % FLAGS.evaluate_every == 0:
                 print("\nEvaluation:")
@@ -182,3 +196,6 @@ with tf.Graph().as_default():
             if current_step % FLAGS.checkpoint_every == 0:
                 path = saver.save(sess, checkpoint_prefix, global_step=current_step)
                 print("Saved model checkpoint to {}\n".format(path))
+        current_step = tf.train.global_step(sess, global_step)
+        path = saver.save(sess, checkpoint_prefix, global_step=current_step)
+        print("Saved model checkpoint to {}\n".format(path))

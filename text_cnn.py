@@ -1,5 +1,20 @@
 import tensorflow as tf
-import numpy as np
+
+# highway layer that borrowed from https://github.com/carpedm20/lstm-char-cnn-tensorflow
+def highway(input_, size, layer_size=1, bias=-2, f=tf.nn.relu):
+    """Highway Network (cf. http://arxiv.org/abs/1505.00387).
+    t = sigmoid(Wy + b)
+    z = t * g(Wy + b) + (1 - t) * y
+    where g is nonlinearity, t is transform gate, and (1 - t) is carry gate.
+    """
+    output = input_
+    for idx in xrange(layer_size):
+        output = f(tf.nn.rnn_cell._linear(output, size, 0, scope='output_lin_%d' % idx))
+        transform_gate = tf.sigmoid(
+            tf.nn.rnn_cell._linear(input_, size, 0, scope='transform_lin_%d' % idx) + bias)
+        carry_gate = 1. - transform_gate
+    output = transform_gate * output + carry_gate * input_
+    return output
 
 
 class TextCNN(object):
@@ -8,8 +23,8 @@ class TextCNN(object):
     Uses an embedding layer, followed by a convolutional, max-pooling and softmax layer.
     """
     def __init__(
-      self, sequence_length, num_classes, vocab_size,
-      embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0):
+        self, sequence_length, num_classes, vocab_size,
+        embedding_size, filter_sizes, num_filters, use_highway=True, l2_reg_lambda=0.0):
 
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, [None, sequence_length], name="input_x")
@@ -57,9 +72,18 @@ class TextCNN(object):
         self.h_pool = tf.concat(3, pooled_outputs)
         self.h_pool_flat = tf.reshape(self.h_pool, [-1, num_filters_total])
 
-        # Add dropout
-        with tf.name_scope("dropout"):
-            self.h_drop = tf.nn.dropout(self.h_pool_flat, self.dropout_keep_prob)
+        if use_highway:
+            # Add highway
+            with tf.name_scope("highway"):
+                self.h_highway = highway(self.h_pool_flat, self.h_pool_flat.get_shape()[1], 1, 0)
+
+            # Add dropout
+            with tf.name_scope("dropout"):
+                self.h_drop = tf.nn.dropout(self.h_highway, self.dropout_keep_prob)
+        else:
+            # Add dropout
+            with tf.name_scope("dropout"):
+                self.h_drop = tf.nn.dropout(self.h_pool_flat, self.dropout_keep_prob)
 
         # Final (unnormalized) scores and predictions
         with tf.name_scope("output"):
