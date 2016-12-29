@@ -44,10 +44,6 @@ def load_data_and_labels(positive_data_file, negative_data_file):
     y = np.concatenate([positive_labels, negative_labels], 0)
     return [x_text, y]
 
-def batches_num_pre_epoch(data, batch_size):
-    data_size = len(data)
-    num_batches_per_epoch = int((data_size-1)/batch_size) + 1
-    return num_batches_per_epoch
 
 def batch_iter(data, batch_size, num_epochs, shuffle=True):
     """

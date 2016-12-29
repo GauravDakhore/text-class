@@ -39,6 +39,8 @@ optional arguments:
                         Save model after this many steps (default: 100)
   --learning_rate LEARNING_RATE
                         The start learning rate (default: 0.001)
+  --decay_step DECAY_STEP
+                        Decay step for rmsprop (default: 500)
   --decay_rate DECAY_RATE
                         Decay rate for rmsprop (default: 0.98)
   --use_highway USE_HIGHWAY

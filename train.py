@@ -30,6 +30,7 @@ tf.flags.DEFINE_integer("num_epochs", 200, "Number of training epochs (default: 
 tf.flags.DEFINE_integer("evaluate_every", 100, "Evaluate model on dev set after this many steps (default: 100)")
 tf.flags.DEFINE_integer("checkpoint_every", 100, "Save model after this many steps (default: 100)")
 tf.flags.DEFINE_float("learning_rate", 0.001, "The start learning rate (default: 0.001)")
+tf.flags.DEFINE_float("decay_step", 500, "Decay step for rmsprop (default: 500)")
 tf.flags.DEFINE_float("decay_rate", 0.98, "Decay rate for rmsprop (default: 0.98)")
 tf.flags.DEFINE_boolean("use_highway", True, "Use the highway network (default: True)")
 # Misc Parameters
@@ -92,9 +93,8 @@ with tf.Graph().as_default():
 
         # Define Training procedure
         global_step = tf.Variable(0, name="global_step", trainable=False)
-        decay_step = data_helpers.batches_num_pre_epoch(y_train, FLAGS.batch_size)
         learning_rate = tf.train.exponential_decay(
-            FLAGS.learning_rate, global_step, decay_step, FLAGS.decay_rate)
+            FLAGS.learning_rate, global_step, FLAGS.decay_step, FLAGS.decay_rate)
         optimizer = tf.train.AdamOptimizer(learning_rate)
 
         grads_and_vars = optimizer.compute_gradients(cnn.loss)
@@ -134,10 +134,7 @@ with tf.Graph().as_default():
         checkpoint_prefix = os.path.join(checkpoint_dir, "model")
         if not os.path.exists(checkpoint_dir):
             os.makedirs(checkpoint_dir)
-        try:
-            saver = tf.train.Saver(tf.global_variables())
-        except:
-            saver = tf.train.Saver(tf.all_variables())
+        saver = tf.train.Saver()
 
         # Write vocabulary
         vocab_processor.save(os.path.join(out_dir, "vocab"))
