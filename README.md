@@ -34,10 +34,17 @@ optional arguments:
   --num_epochs NUM_EPOCHS
                         Number of training epochs (default: 100)
   --evaluate_every EVALUATE_EVERY
-                        Evaluate model on dev set after this many steps
-                        (default: 100)
+                        Evaluate model on dev set after this many steps (default: 100)
   --checkpoint_every CHECKPOINT_EVERY
                         Save model after this many steps (default: 100)
+  --learning_rate LEARNING_RATE
+                        The start learning rate (default: 0.001)
+  --decay_step DECAY_STEP
+                        Decay step for rmsprop (default: 500)
+  --decay_rate DECAY_RATE
+                        Decay rate for rmsprop (default: 0.98)
+  --use_highway USE_HIGHWAY
+                        Use the highway network (default: True)
   --allow_soft_placement ALLOW_SOFT_PLACEMENT
                         Allow device soft device placement
   --noallow_soft_placement
