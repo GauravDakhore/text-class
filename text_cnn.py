@@ -16,9 +16,6 @@ class TextCNN(object):
         self.input_y = tf.placeholder(tf.float32, [None, num_classes], name="input_y")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
-        # Keeping track of l2 regularization loss (optional)
-        l2_loss = tf.constant(0.0)
-
         # Embedding layer
         with tf.device('/cpu:0'), tf.name_scope("embedding"):
             self.W = tf.Variable(
@@ -41,7 +38,6 @@ class TextCNN(object):
                     strides=[1, 1, 1, 1],
                     padding="VALID",
                     name="conv")
-                l2_loss += tf.nn.l2_loss(W)
                 # Apply nonlinearity
                 h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
                 # Maxpooling over the outputs
@@ -69,10 +65,12 @@ class TextCNN(object):
                 shape=[num_filters_total, num_classes],
                 initializer=tf.contrib.layers.xavier_initializer())
             b = tf.Variable(tf.constant(0.1, shape=[num_classes]), name="b")
-            l2_loss += tf.nn.l2_loss(W)
             self.scores = tf.nn.xw_plus_b(self.h_drop, W, b, name="scores")
             self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
+        # Calculate L2 Regularization
+        l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if "b" not in v.name])
+        
         # Calculate mean cross-entropy loss
         with tf.name_scope("loss"):
             losses = tf.nn.softmax_cross_entropy_with_logits(logits=self.scores, labels=self.input_y)
