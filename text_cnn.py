@@ -16,6 +16,8 @@ class TextCNN(object):
         self.input_y = tf.placeholder(tf.float32, [None, num_classes], name="input_y")
         self.dropout_keep_prob = tf.placeholder(tf.float32, name="dropout_keep_prob")
 
+        l2_loss = tf.constant(0.0)
+        
         # Embedding layer
         with tf.device('/cpu:0'), tf.name_scope("embedding"):
             self.W = tf.Variable(
@@ -69,7 +71,8 @@ class TextCNN(object):
             self.predictions = tf.argmax(self.scores, 1, name="predictions")
 
         # Calculate L2 Regularization
-        l2_loss = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if "b" not in v.name])
+        if l2_reg_lambda > 0.:
+            l2_loss = tf.add_n([tf.nn.l2_loss(var) for var in tf.trainable_variables()[1:] if "W" in var.name])
         
         # Calculate mean cross-entropy loss
         with tf.name_scope("loss"):
