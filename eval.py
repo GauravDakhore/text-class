@@ -1,62 +1,48 @@
-#! /usr/bin/env python
-
 import tensorflow as tf
 import numpy as np
-import os
-import time
-import datetime
-import data_helpers
-from text_cnn import TextCNN
-from tensorflow.contrib import learn
-import csv
-
-# Parameters
-# ==================================================
-
-# Data Parameters
-tf.flags.DEFINE_string("positive_data_file", "./data/rt-polaritydata/rt-polarity.pos", "Data source for the positive data.")
-tf.flags.DEFINE_string("negative_data_file", "./data/rt-polaritydata/rt-polarity.neg", "Data source for the negative data.")
-
-# Eval Parameters
-tf.flags.DEFINE_integer("batch_size", 64, "Batch Size (default: 64)")
-tf.flags.DEFINE_string("checkpoint_dir", "", "Checkpoint directory from training run")
-tf.flags.DEFINE_boolean("eval_train", False, "Evaluate on all training data")
-
-# Misc Parameters
-tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device placement")
-tf.flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
+import corpus_handel
+import json
+#Corpus builder
+#=====================================================
+new_question = input("Ask a question: ")
+new_question = new_question.strip()
+new_question = corpus_handel.clean_str(new_question)
+new_question = new_question.split(" ")
 
 
-FLAGS = tf.flags.FLAGS
-FLAGS._parse_flags()
-print("\nParameters:")
-for attr, value in sorted(FLAGS.__flags.items()):
-    print("{}={}".format(attr.upper(), value))
-print("")
+sentences, dump = corpus_handel.load_data_and_labels()
+sequence_length = max(len(x) for x in sentences)
+l = 0
+x1 = ""
+for x in sentences:
+    l1 = len(x)
+    if l1>l:
+        l = l1
+        x1 = x
 
-# CHANGE THIS: Load data. Load your own data here
-if FLAGS.eval_train:
-    x_raw, y_test = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
-    y_test = np.argmax(y_test, axis=1)
-else:
-    x_raw = ["a masterpiece four years in the making", "everything is off."]
-    y_test = [1, 0]
+print(l)
+print(x1)
+sentences_padded = corpus_handel.pad_sentences(sentences)
+vocabulary, vocabulary_inv = corpus_handel.build_vocab(sentences_padded)
 
-# Map data into vocabulary
-vocab_path = os.path.join(FLAGS.checkpoint_dir, "..", "vocab")
-vocab_processor = learn.preprocessing.VocabularyProcessor.restore(vocab_path)
-x_test = np.array(list(vocab_processor.transform(x_raw)))
+num_padding = sequence_length - len(new_question)
+new_sentence = new_question + ["<PAD/>"] * num_padding
 
-print("\nEvaluating...\n")
+x = np.array([vocabulary[word] for word in new_sentence])
+x_test = np.array([x])
+print(sequence_length)
+
+with open('test.json', "w", encoding="utf8") as outfile:
+    json.dump(vocabulary, outfile)
 
 # Evaluation
 # ==================================================
-checkpoint_file = tf.train.latest_checkpoint(FLAGS.checkpoint_dir)
+checkpoint_file = tf.train.latest_checkpoint('runs/A/checkpoints/')
 graph = tf.Graph()
 with graph.as_default():
     session_conf = tf.ConfigProto(
-      allow_soft_placement=FLAGS.allow_soft_placement,
-      log_device_placement=FLAGS.log_device_placement)
+      allow_soft_placement=True,
+      log_device_placement=False)
     sess = tf.Session(config=session_conf)
     with sess.as_default():
         # Load the saved meta graph and restore variables
@@ -72,24 +58,23 @@ with graph.as_default():
         predictions = graph.get_operation_by_name("output/predictions").outputs[0]
 
         # Generate batches for one epoch
-        batches = data_helpers.batch_iter(list(x_test), FLAGS.batch_size, 1, shuffle=False)
+        batches = corpus_handel.batch_iter(x_test, 30, 1, shuffle=False)
 
         # Collect the predictions here
         all_predictions = []
 
         for x_test_batch in batches:
             batch_predictions = sess.run(predictions, {input_x: x_test_batch, dropout_keep_prob: 1.0})
+            #print(batch_predictions)            
             all_predictions = np.concatenate([all_predictions, batch_predictions])
 
-# Print accuracy if y_test is defined
-if y_test is not None:
-    correct_predictions = float(sum(all_predictions == y_test))
-    print("Total number of test examples: {}".format(len(y_test)))
-    print("Accuracy: {:g}".format(correct_predictions/float(len(y_test))))
-
-# Save the evaluation to a csv
-predictions_human_readable = np.column_stack((np.array(x_raw), all_predictions))
-out_path = os.path.join(FLAGS.checkpoint_dir, "..", "prediction.csv")
-print("Saving evaluation to {0}".format(out_path))
-with open(out_path, 'w') as f:
-    csv.writer(f).writerows(predictions_human_readable)
+if(all_predictions[0] == 0):
+    print('html')
+elif(all_predictions[0] == 1):
+    print('mysql')
+elif(all_predictions[0] == 2):
+    print('php')
+elif(all_predictions[0] == 3):
+    print('java')
+else:
+    print('Unknown')

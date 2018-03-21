@@ -1,5 +1,6 @@
 *.npy
 runs/
+export/
 
 # Created by https://www.gitignore.io/api/python,ipythonnotebook
 
