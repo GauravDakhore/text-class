@@ -35,18 +35,18 @@ tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device 
 tf.flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
 
 FLAGS = tf.flags.FLAGS
-FLAGS._parse_flags()
-print("\nParameters:")
-for attr, value in sorted(FLAGS.__flags.items()):
-    print("{}={}".format(attr.upper(), value))
-print("")
+#FLAGS._parse_flags()
+#print("\nParameters:")
+#for attr, value in sorted(FLAGS.__flags.items()):
+#    print("{}={}".format(attr.upper(), value))
+#print("")
 
 
 # Data Preparation
 # ==================================================
 
 # Load data
-print("Loading data...")
+#print("Loading data...")
 x_text, y = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
 
 # Build vocabulary
@@ -68,8 +68,8 @@ y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
 
 del x, y, x_shuffled, y_shuffled
 
-print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
-print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
+#print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
+#print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
 
 
 # Training
@@ -109,7 +109,7 @@ with tf.Graph().as_default():
         # Output directory for models and summaries
         timestamp = str(int(time.time()))
         out_dir = os.path.abspath(os.path.join(os.path.curdir, "runs", timestamp))
-        print("Writing to {}\n".format(out_dir))
+        #print("Writing to {}\n".format(out_dir))
 
         # Summaries for loss and accuracy
         loss_summary = tf.summary.scalar("loss", cnn.loss)
