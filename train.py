@@ -3,11 +3,13 @@
 import tensorflow as tf
 import numpy as np
 import os
+import sys
 import time
 import datetime
 import data_helpers
 from text_cnn import TextCNN
 from tensorflow.contrib import learn
+from sklearn.model_selection import KFold
 
 # Parameters
 # ==================================================
@@ -35,7 +37,7 @@ tf.flags.DEFINE_boolean("allow_soft_placement", True, "Allow device soft device 
 tf.flags.DEFINE_boolean("log_device_placement", False, "Log placement of ops on devices")
 
 FLAGS = tf.flags.FLAGS
-FLAGS._parse_flags()
+FLAGS(sys.argv)
 print("\nParameters:")
 for attr, value in sorted(FLAGS.__flags.items()):
     print("{}={}".format(attr.upper(), value))
@@ -60,11 +62,14 @@ shuffle_indices = np.random.permutation(np.arange(len(y)))
 x_shuffled = x[shuffle_indices]
 y_shuffled = y[shuffle_indices]
 
+# K fold cross validation
+seed = 10
+kfold = KFold(n_splits=10, shuffle=True, random_state=seed)
+
 # Split train/test set
-# TODO: This is very crude, should use cross-validation
-dev_sample_index = -1 * int(FLAGS.dev_sample_percentage * float(len(y)))
-x_train, x_dev = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
-y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
+for train_index, test_index in kfold.split(x_shuffled, y_shuffled):
+    x_train, x_dev = x_shuffled[train_index], x_shuffled[test_index]
+    y_train, y_dev = y_shuffled[train_index], y_shuffled[test_index]
 
 del x, y, x_shuffled, y_shuffled
 
