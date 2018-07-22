@@ -29,28 +29,32 @@ class TextCNN(object):
 
         # Create a convolution + maxpool layer for each filter size
         pooled_outputs = []
+        split_filters = [64 for _ in range(int(num_filters/64))]
+        if num_filters % 64 > 0:
+            split_filters.append(int(num_filters % 64))
         for i, filter_size in enumerate(filter_sizes):
             with tf.name_scope("conv-maxpool-%s" % filter_size):
-                # Convolution Layer
-                filter_shape = [filter_size, embedding_size, 1, num_filters]
-                W = tf.Variable(tf.truncated_normal(filter_shape, stddev=0.1), name="W")
-                b = tf.Variable(tf.constant(0.1, shape=[num_filters]), name="b")
-                conv = tf.nn.conv2d(
-                    self.embedded_chars_expanded,
-                    W,
-                    strides=[1, 1, 1, 1],
-                    padding="VALID",
-                    name="conv")
-                # Apply nonlinearity
-                h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
-                # Maxpooling over the outputs
-                pooled = tf.nn.max_pool(
-                    h,
-                    ksize=[1, sequence_length - filter_size + 1, 1, 1],
-                    strides=[1, 1, 1, 1],
-                    padding='VALID',
-                    name="pool")
-                pooled_outputs.append(pooled)
+                for num_filter in split_filters:
+                    # Convolution Layer
+                    filter_shape = [filter_size, embedding_size, 1, num_filter]
+                    W = tf.Variable(tf.truncated_normal(filter_shape, stddev=0.1), name="W")
+                    b = tf.Variable(tf.constant(0.1, shape=[num_filter]), name="b")
+                    conv = tf.nn.conv2d(
+                        self.embedded_chars_expanded,
+                        W,
+                        strides=[1, 1, 1, 1],
+                        padding="VALID",
+                        name="conv")
+                    # Apply nonlinearity
+                    h = tf.nn.relu(tf.nn.bias_add(conv, b), name="relu")
+                    # Maxpooling over the outputs
+                    pooled = tf.nn.max_pool(
+                        h,
+                        ksize=[1, sequence_length - filter_size + 1, 1, 1],
+                        strides=[1, 1, 1, 1],
+                        padding='VALID',
+                        name="pool")
+                    pooled_outputs.append(pooled)
 
         # Combine all the pooled features
         num_filters_total = num_filters * len(filter_sizes)
