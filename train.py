@@ -8,6 +8,7 @@ import datetime
 import data_helpers
 from text_cnn import TextCNN
 from tensorflow.contrib import learn
+from sklearn.model_selection import KFold
 
 # Parameters
 # ==================================================
@@ -47,6 +48,7 @@ def preprocess():
 
     # Load data
     print("Loading data...")
+    data = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
     x_text, y = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
 
     # Build vocabulary
@@ -60,17 +62,17 @@ def preprocess():
     x_shuffled = x[shuffle_indices]
     y_shuffled = y[shuffle_indices]
 
-    # Split train/test set
-    # TODO: This is very crude, should use cross-validation
-    dev_sample_index = -1 * int(FLAGS.dev_sample_percentage * float(len(y)))
-    x_train, x_dev = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
-    y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
+    # # Split train/test set
+    # # TODO: This is very crude, should use cross-validation
+    # dev_sample_index = -1 * int(FLAGS.dev_sample_percentage * float(len(y)))
+    # x_train, x_dev = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
+    # y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
 
-    del x, y, x_shuffled, y_shuffled
-
-    print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
-    print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
-    return x_train, y_train, vocab_processor, x_dev, y_dev
+    #del x, y, x_shuffled, y_shuffled
+    return x_shuffled, y_shuffled, vocab_processor
+    # print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
+    # print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
+    # return x_train, y_train, vocab_processor, x_dev, y_dev
 
 def train(x_train, y_train, vocab_processor, x_dev, y_dev):
     # Training
@@ -189,8 +191,20 @@ def train(x_train, y_train, vocab_processor, x_dev, y_dev):
                     print("Saved model checkpoint to {}\n".format(path))
 
 def main(argv=None):
-    x_train, y_train, vocab_processor, x_dev, y_dev = preprocess()
-    train(x_train, y_train, vocab_processor, x_dev, y_dev)
+    x, y, vocab_processor = preprocess()
+    kf = KFold(n_splits=10)
+
+    # 10-Fold validation
+    for train_idx, dev_idx in kf.split(x, y):
+        x_train, x_dev = x[train_idx], x[dev_idx]
+        y_train, y_dev = y[train_idx], y[dev_idx]
+        print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
+        print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
+
+        # Training
+        train(x_train, y_train, vocab_processor, x_dev, y_dev)
+
+
 
 if __name__ == '__main__':
     tf.app.run()
