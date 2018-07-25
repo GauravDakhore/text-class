@@ -8,6 +8,7 @@ import datetime
 import data_helpers
 from text_cnn import TextCNN
 from tensorflow.contrib import learn
+from sklearn.model_selection import KFold
 
 # Parameters
 # ==================================================
@@ -47,6 +48,7 @@ def preprocess():
 
     # Load data
     print("Loading data...")
+    data = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
     x_text, y = data_helpers.load_data_and_labels(FLAGS.positive_data_file, FLAGS.negative_data_file)
 
     # Build vocabulary
@@ -60,19 +62,9 @@ def preprocess():
     x_shuffled = x[shuffle_indices]
     y_shuffled = y[shuffle_indices]
 
-    # Split train/test set
-    # TODO: This is very crude, should use cross-validation
-    dev_sample_index = -1 * int(FLAGS.dev_sample_percentage * float(len(y)))
-    x_train, x_dev = x_shuffled[:dev_sample_index], x_shuffled[dev_sample_index:]
-    y_train, y_dev = y_shuffled[:dev_sample_index], y_shuffled[dev_sample_index:]
+    return x_shuffled, y_shuffled, vocab_processor
 
-    del x, y, x_shuffled, y_shuffled
-
-    print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
-    print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
-    return x_train, y_train, vocab_processor, x_dev, y_dev
-
-def train(x_train, y_train, vocab_processor, x_dev, y_dev):
+def train(x, y, vocab_processor):
     # Training
     # ==================================================
 
@@ -83,8 +75,8 @@ def train(x_train, y_train, vocab_processor, x_dev, y_dev):
         sess = tf.Session(config=session_conf)
         with sess.as_default():
             cnn = TextCNN(
-                sequence_length=x_train.shape[1],
-                num_classes=y_train.shape[1],
+                sequence_length=x.shape[1],
+                num_classes=y.shape[1],
                 vocab_size=len(vocab_processor.vocabulary_),
                 embedding_size=FLAGS.embedding_dim,
                 filter_sizes=list(map(int, FLAGS.filter_sizes.split(","))),
@@ -172,25 +164,36 @@ def train(x_train, y_train, vocab_processor, x_dev, y_dev):
                 if writer:
                     writer.add_summary(summaries, step)
 
-            # Generate batches
-            batches = data_helpers.batch_iter(
-                list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
-            # Training loop. For each batch...
-            for batch in batches:
-                x_batch, y_batch = zip(*batch)
-                train_step(x_batch, y_batch)
-                current_step = tf.train.global_step(sess, global_step)
-                if current_step % FLAGS.evaluate_every == 0:
-                    print("\nEvaluation:")
-                    dev_step(x_dev, y_dev, writer=dev_summary_writer)
-                    print("")
-                if current_step % FLAGS.checkpoint_every == 0:
-                    path = saver.save(sess, checkpoint_prefix, global_step=current_step)
-                    print("Saved model checkpoint to {}\n".format(path))
+            kf = KFold(n_splits=10)
+            for train_idx, dev_idx in kf.split(x, y):
+                x_train, x_dev = x[train_idx], x[dev_idx]
+                y_train, y_dev = y[train_idx], y[dev_idx]
+                print("Vocabulary Size: {:d}".format(len(vocab_processor.vocabulary_)))
+                print("Train/Dev split: {:d}/{:d}".format(len(y_train), len(y_dev)))
+
+                # Generate batches
+                batches = data_helpers.batch_iter(
+                    list(zip(x_train, y_train)), FLAGS.batch_size, FLAGS.num_epochs)
+                # Training loop. For each batch...
+                for batch in batches:
+                    x_batch, y_batch = zip(*batch)
+                    train_step(x_batch, y_batch)
+                    current_step = tf.train.global_step(sess, global_step)
+                    if current_step % FLAGS.evaluate_every == 0:
+                        print("\nEvaluation:")
+                        dev_step(x_dev, y_dev, writer=dev_summary_writer)
+                        print("")
+                    if current_step % FLAGS.checkpoint_every == 0:
+                        path = saver.save(sess, checkpoint_prefix, global_step=current_step)
+                        print("Saved model checkpoint to {}\n".format(path))
 
 def main(argv=None):
-    x_train, y_train, vocab_processor, x_dev, y_dev = preprocess()
-    train(x_train, y_train, vocab_processor, x_dev, y_dev)
+    x, y, vocab_processor = preprocess()
+
+    # Training
+    train(x, y, vocab_processor)
+
+
 
 if __name__ == '__main__':
     tf.app.run()
