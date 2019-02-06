@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+#참조: http://www.wildml.com/2015/12/implementing-a-cnn-for-text-classification-in-tensorflow/
 
 import tensorflow as tf
 import numpy as np
